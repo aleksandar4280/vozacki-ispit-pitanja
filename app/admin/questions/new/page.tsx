@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo,useRef, useState } from "react";
 import AdminGuard from "@/components/AdminGuard";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 
@@ -17,6 +17,8 @@ export default function NewQuestionPage() {
   const [points, setPoints] = useState<number>(1);
   const [multi, setMulti] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null); // bitno: reset fajla
+
   const [answers, setAnswers] = useState<AnswerDraft[]>([
     { text: "", is_correct: false },
     { text: "", is_correct: false },
@@ -32,9 +34,9 @@ export default function NewQuestionPage() {
 
   async function loadRefs() {
     const supabase = supabaseBrowser();
-    const { data: a } = await supabase.from("areas").select("*").order("name");
+    const { data: a } = await supabase.from("areas").select("*").order("created_at", { ascending: true });
     setAreas(a ?? []);
-    const { data: s } = await supabase.from("subareas").select("*").order("name");
+    const { data: s } = await supabase.from("subareas").select("*").order("created_at", { ascending: true });
     setSubs(s ?? []);
   }
 
@@ -91,7 +93,7 @@ export default function NewQuestionPage() {
 
       setOk("Pitanje sačuvano.");
       // reset forme
-      setText(""); setFile(null); setPoints(1); setMulti(false);
+      setText(""); setFile(null); setMulti(false);
       setAnswers([{ text: "", is_correct: false }, { text: "", is_correct: false }, { text: "", is_correct: false }]);
     } catch (e: any) {
       setErr(e.message ?? "Greška pri čuvanju.");

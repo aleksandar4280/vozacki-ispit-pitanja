@@ -12,7 +12,7 @@ export default function AreasPage() {
 
   async function load() {
     const supabase = supabaseBrowser();
-    const { data } = await supabase.from("areas").select("*").order("name");
+    const { data } = await supabase.from("areas").select("*").order("created_at", { ascending: true });
     setAreas(data ?? []);
   }
 

@@ -15,9 +15,9 @@ export default function SubareasPage() {
 
   async function load() {
     const supabase = supabaseBrowser();
-    const { data: a } = await supabase.from("areas").select("*").order("name");
+    const { data: a } = await supabase.from("areas").select("*").order("created_at", { ascending: true });
     setAreas(a ?? []);
-    const { data: s } = await supabase.from("subareas").select("*").order("name");
+    const { data: s } = await supabase.from("subareas").select("*").order("created_at", { ascending: true });
     setSubs(s ?? []);
   }
   useEffect(() => { load(); }, []);
