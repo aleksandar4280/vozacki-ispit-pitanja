@@ -1,3 +1,4 @@
+// file: app/layout.tsx  (dodaj linkove u nav)
 import "./globals.css";
 import Link from "next/link";
 
@@ -8,11 +9,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="border-b bg-white">
           <nav className="container mx-auto max-w-4xl px-4 flex items-center justify-between py-3">
             <Link href="/" className="font-semibold">Baza Ispitnih Pitanja</Link>
-            <div className="flex gap-4 text-sm">
+            <div className="flex gap-4 text-sm flex-wrap">
               <Link href="/pregled">Pregled</Link>
-              <Link href="/admin/areas">Admin: Oblasti</Link>
-              <Link href="/admin/subareas">Admin: Podoblasti</Link>
-              <Link href="/admin/questions/new">Admin: Novo pitanje</Link>
+              <Link href="/admin/areas">Oblasti</Link>
+              <Link href="/admin/subareas">Podoblasti</Link>
+              <Link href="/admin/questions/new">Novo pitanje</Link>
+              <Link href="/admin/schools">Škole</Link>
+              <Link href="/admin/candidates">Kandidati</Link>
+              <Link href="/admin/candidates/new">Novi kandidat</Link>
               <Link href="/login">Prijava</Link>
             </div>
           </nav>
