@@ -12,6 +12,7 @@ export default function NewCandidatePage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [idNumber, setIdNumber] = useState("");
+  const [phone, setPhone] = useState(""); // ← NOVO
   const [examDate, setExamDate] = useState<string>("");
   const [examPassed, setExamPassed] = useState<boolean | "">("");
   const [firstLesson, setFirstLesson] = useState<string>("");
@@ -28,14 +29,17 @@ export default function NewCandidatePage() {
     })();
   }, []);
 
+  function normalizePhone(v: string) {
+    // zašto: čuva + i cifre (lokalna normalizacija radi urednosti)
+    return v.replace(/[^\d+]/g, "");
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null); setOk(null);
     if (!firstName.trim() || !lastName.trim()) return setErr("Ime i prezime su obavezni.");
     if (!idNumber.trim()) return setErr("ID broj je obavezan.");
     if (!schoolId) return setErr("Izaberi autoškolu.");
-
-    // validacija datuma: lastLesson >= firstLesson (ako oba postoje)
     if (firstLesson && lastLesson && new Date(lastLesson) < new Date(firstLesson)) {
       return setErr("Poslednji čas ne može biti pre prvog časa.");
     }
@@ -45,6 +49,7 @@ export default function NewCandidatePage() {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       id_number: idNumber.trim(),
+      phone: phone ? normalizePhone(phone) : null, // ← NOVO
       school_id: schoolId,
       exam_date: examDate || null,
       exam_passed: examPassed === "" ? null : !!examPassed,
@@ -56,7 +61,7 @@ export default function NewCandidatePage() {
     if (error) return setErr(error.message);
 
     // reset (zadržavamo izabranu školu)
-    setFirstName(""); setLastName(""); setIdNumber("");
+    setFirstName(""); setLastName(""); setIdNumber(""); setPhone("");
     setExamDate(""); setExamPassed("");
     setFirstLesson(""); setLastLesson("");
     setOk("Kandidat je sačuvan.");
@@ -71,7 +76,11 @@ export default function NewCandidatePage() {
             <input className="border rounded p-2" placeholder="Ime" value={firstName} onChange={e=>setFirstName(e.target.value)} />
             <input className="border rounded p-2" placeholder="Prezime" value={lastName} onChange={e=>setLastName(e.target.value)} />
           </div>
-          <input className="border rounded p-2 w-full" placeholder="ID broj" value={idNumber} onChange={e=>setIdNumber(e.target.value)} />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input className="border rounded p-2 w-full" placeholder="ID broj" value={idNumber} onChange={e=>setIdNumber(e.target.value)} />
+            <input className="border rounded p-2 w-full" placeholder="Telefon (npr. +381601234567)" value={phone} onChange={e=>setPhone(e.target.value)} />
+          </div>
 
           <select className="border rounded p-2" value={schoolId} onChange={e=>setSchoolId(Number(e.target.value))}>
             <option value="">Izaberi autoškolu</option>
