@@ -11,10 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="font-semibold">Baza Ispitnih Pitanja</Link>
             <div className="flex gap-4 text-sm flex-wrap">
               <Link href="/pregled">Pregled</Link>
-              <Link href="/admin/areas">Oblasti</Link>
-              <Link href="/admin/subareas">Podoblasti</Link>
               <Link href="/admin/questions/new">Novo pitanje</Link>
-              <Link href="/admin/schools">Škole</Link>
               <Link href="/admin/candidates">Kandidati</Link>
               <Link href="/admin/candidates/new">Novi kandidat</Link>
               <Link href="/login">Prijava</Link>

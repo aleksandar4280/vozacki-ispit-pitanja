@@ -17,6 +17,7 @@ export default function NewCandidatePage() {
   const [examPassed, setExamPassed] = useState<boolean | "">("");
   const [firstLesson, setFirstLesson] = useState<string>("");
   const [lastLesson, setLastLesson] = useState<string>("");
+  const [notMyCandidate, setNotMyCandidate] = useState<boolean>(false);
 
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -54,7 +55,8 @@ export default function NewCandidatePage() {
       exam_date: examDate || null,
       exam_passed: examPassed === "" ? null : !!examPassed,
       first_lesson_date: firstLesson || null,
-      last_lesson_date: lastLesson || null
+      last_lesson_date: lastLesson || null,
+      not_my_candidate: !!notMyCandidate
     };
 
     const { error } = await supabase.from("candidates").insert(payload);
@@ -64,6 +66,7 @@ export default function NewCandidatePage() {
     setFirstName(""); setLastName(""); setIdNumber(""); setPhone("");
     setExamDate(""); setExamPassed("");
     setFirstLesson(""); setLastLesson("");
+    setNotMyCandidate(false);
     setOk("Kandidat je sačuvan.");
   }
 
@@ -116,6 +119,19 @@ export default function NewCandidatePage() {
               <input type="date" className="border rounded p-2 w-full" value={lastLesson} onChange={e=>setLastLesson(e.target.value)} />
             </div>
           </div>
+          <div className="flex items-center gap-2">
+              {/* Zašto: direktan boolean za jasne filtere i izveštaje */}
+              <input
+                id="notMyCandidate"
+                type="checkbox"
+                checked={notMyCandidate}
+                onChange={(e) => setNotMyCandidate(e.target.checked)}
+              />
+              <label htmlFor="notMyCandidate" className="text-sm select-none">
+                Nije moj kandidat
+              </label>
+            </div>
+          
 
           {err && <p className="text-red-600 text-sm">{err}</p>}
           {ok && <p className="text-green-600 text-sm">{ok}</p>}
