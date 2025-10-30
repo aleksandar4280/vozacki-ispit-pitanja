@@ -60,6 +60,12 @@ export default function EditCandidatePage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchDebounce = useRef<NodeJS.Timeout | null>(null);
 
+  //MUP ID pretraga
+  const [mupQ, setMupQ] = useState<string>("");
+  const [mupLoading, setMupLoading] = useState(false);
+  const [mupErr, setMupErr] = useState<string | null>(null);
+  const [mupHits, setMupHits] = useState<{ id: number; text: string; image_url: string | null; mup_id: string | null }[]>([]);
+
   useEffect(() => {
     const supabase = supabaseBrowser();
     (async () => {
@@ -141,6 +147,51 @@ export default function EditCandidatePage() {
     }, 350);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, wrongSearchOpen]);
+
+   // Debounced pretraga po MUP ID
+ useEffect(() => {
+   const term = mupQ.trim();
+   setMupErr(null);
+   if (!term) { setMupHits([]); return; }
+   const supabase = supabaseBrowser();
+   setMupLoading(true);
+   const t = setTimeout(async () => {
+     try {
+       // ako korisnik unese tačno (sve cifre / exact), pokušaj eq; u suprotnom fallback na ilike
+       const exact = term;
+       let query = supabase
+         .from("questions")
+         .select("id, text, image_url, mup_id")
+         .order("created_at", { ascending: true })
+         .limit(50);
+       if (exact.length > 0) {
+         // prvo eq
+         const { data: d1, error: e1 } = await query.eq("mup_id", exact);
+         if (e1) throw e1;
+         if (d1 && d1.length > 0) {
+           setMupHits(d1 as any);
+         } else {
+           // fallback: ilike sadrži
+           const { data: d2, error: e2 } = await supabase
+             .from("questions")
+             .select("id, text, image_url, mup_id")
+             .ilike("mup_id", `%${term}%`)
+             .order("created_at", { ascending: true })
+             .limit(50);
+           if (e2) throw e2;
+           setMupHits((d2 ?? []) as any);
+         }
+       }
+     } catch (e: any) {
+       setMupErr(e?.message || "Greška pri pretrazi po MUP ID.");
+       setMupHits([]);
+     } finally {
+       setMupLoading(false);
+     }
+   }, 300);
+   return () => clearTimeout(t);
+ }, [mupQ]);
+
 
   async function searchQuestions() {
     const term = searchTerm.trim();
@@ -371,6 +422,68 @@ export default function EditCandidatePage() {
                 <div className="mt-4 grid grid-cols-1 lg:grid-cols-5 gap-4">
                   {/* Levo: rezultati (3/5) */}
                   <div className="lg:col-span-3">
+                    <div className="space-y-1">
+   <label className="block text-sm">Pretraga po MUP ID</label>
+   <input
+     className="w-full border rounded p-2"
+     placeholder="Unesi MUP ID (npr. 12345 ili deo ID-a)"
+     value={mupQ}
+     onChange={(e) => setMupQ(e.target.value)}
+   />
+   <div className="text-xs text-gray-600">
+     Unesi tačan ID za 1 rezultat ili deo ID-a za listu (max 50).
+   </div>
+ </div>
+
+ {/* Rezultati po MUP ID */}
+ {mupQ.trim() && (
+   <div className="mt-2 space-y-2">
+     <div className="text-sm text-gray-700">
+       {mupLoading ? "Pretražujem…" : `Pronađeno: ${mupHits.length}`}
+       {mupErr && <span className="text-red-600 ml-2">{mupErr}</span>}
+     </div>
+     <div className="space-y-2 max-h-72 overflow-auto border rounded p-2">
+       {mupHits.map((q) => (
+         <div key={q.id} className="flex items-start gap-2 border rounded p-2">
+           {q.image_url && (
+             <img src={q.image_url} alt="" className="h-10 w-14 object-cover rounded" />
+           )}
+           <div className="flex-1">
+             <div className="text-sm font-medium">{q.text}</div>
+             <div className="text-xs text-gray-600">MUP ID: {q.mup_id ?? "-"}</div>
+           </div>
+           <button
+             type="button"
+             className="border rounded px-2 py-1 text-sm"
+             // POSLE (ispravno, koristi setSelectedWrong i dovlači answers)
+onClick={async () => {
+  // već je dodato?
+  if (selectedWrong.some((x) => x.id === q.id)) return;
+
+  // dovuci kompletno pitanje sa odgovorima da ispoštuješ QuestionMini
+  const sb = supabaseBrowser();
+  const { data, error } = await sb
+    .from("questions")
+    .select("id, text, image_url, answers:answers(id, text, is_correct)")
+    .eq("id", q.id)
+    .single();
+
+  if (!error && data) {
+    setSelectedWrong((prev) => [...prev, data as QuestionMini]);
+  }
+}}
+
+           >
+             Dodaj
+           </button>
+         </div>
+       ))}
+       {(!mupLoading && mupHits.length === 0) && (
+         <div className="text-sm text-gray-500">Nema rezultata.</div>
+       )}
+     </div>
+   </div>
+ )}
                     <div className="flex gap-2 mb-3">
                       <input
                         className="border rounded p-2 flex-1"
