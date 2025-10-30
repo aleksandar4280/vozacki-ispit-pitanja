@@ -101,29 +101,67 @@ export default function NewSimulationPage() {
   const totalPoints = useMemo(() => picked.reduce((s, q) => s + (q.points || 0), 0), [picked]);
 
   // Debounced pretraga pitanja
-  useEffect(() => {
-    const t = term.trim();
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (t.length < 2) { setHits([]); return; }
 
-    debounceRef.current = setTimeout(async () => {
-      setLoading(true);
+useEffect(() => {
+  const t = term.trim();
+  if (debounceRef.current) clearTimeout(debounceRef.current);
+  if (t.length < 2) { setHits([]); return; }
+
+  debounceRef.current = setTimeout(async () => {
+    setLoading(true);
+    try {
       const sb = supabaseBrowser();
-      const { data, error } = await sb
+
+      // 1) Pretraga po tekstu pitanja
+      const { data: qByText } = await sb
         .from("questions")
-        .select(
-          "id, text, image_url, points, multi_correct, answers:answers(id, text, is_correct)"
-        )
+        .select("id, text, image_url, points, multi_correct, answers:answers(id, text, is_correct)")
         .ilike("text", `%${t}%`)
         .order("created_at", { ascending: true })
-        .limit(300)
-        .returns<Question[]>();
-      if (!error) setHits(data ?? []);
-      setLoading(false);
-    }, 350);
+        .limit(100);
 
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [term]);
+      const byText = (qByText ?? []) as Question[];
+
+      // 2) Pretraga po tekstu odgovora → najpre iz answers izvući question_id
+      const { data: ansRows } = await sb
+        .from("answers")
+        .select("question_id")
+        .ilike("text", `%${t}%`)
+        .limit(500);
+
+      const idsFromAnswers = Array.from(
+        new Set((ansRows ?? []).map(r => r.question_id as number))
+      );
+
+      // ukloni već dohvaćena pitanja da ne dupliramo upit
+      const existingIds = new Set(byText.map(q => q.id));
+      const missingIds = idsFromAnswers.filter(id => !existingIds.has(id));
+
+      let byAnswers: Question[] = [];
+      if (missingIds.length > 0) {
+        const { data: qByAns } = await sb
+          .from("questions")
+          .select("id, text, image_url, points, multi_correct, answers:answers(id, text, is_correct)")
+          .in("id", missingIds)
+          .order("created_at", { ascending: true })
+          .limit(500);
+        byAnswers = (qByAns ?? []) as Question[];
+      }
+
+      // 3) Spoji bez duplikata
+      const mergedMap = new Map<number, Question>();
+      for (const q of [...byText, ...byAnswers]) mergedMap.set(q.id, q);
+      setHits(Array.from(mergedMap.values()));
+    } catch {
+      setHits([]);
+    } finally {
+      setLoading(false);
+    }
+  }, 350);
+
+  return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+}, [term]);
+
 
   function add(q: Question) {
     if (picked.find((p) => p.id === q.id)) return;
