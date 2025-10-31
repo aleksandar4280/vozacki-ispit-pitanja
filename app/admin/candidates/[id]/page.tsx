@@ -66,21 +66,51 @@ export default function EditCandidatePage() {
   const [mupErr, setMupErr] = useState<string | null>(null);
   const [mupHits, setMupHits] = useState<{ id: number; text: string; image_url: string | null; mup_id: string | null }[]>([]);
 
-  useEffect(() => {
-    const supabase = supabaseBrowser();
-    (async () => {
-      const [{ data: sc }, { data: c, error }] = await Promise.all([
-        supabase.from("schools").select("*").order("created_at", { ascending: true }),
-        supabase.from("candidates").select("*").eq("id", candId).single()
-      ]);
-      if (error) { setErr(error.message); setLoading(false); return; }
-      setSchools(sc ?? []);
-      const cand = c as Candidate;
-      if (!cand.phone) cand.phone = null;
-      setForm(cand);
+  // PATCH: zameni ceo postojeći useEffect koji učitava candidate + schools ovim blokom
+
+useEffect(() => {
+  const supabase = supabaseBrowser();
+  (async () => {
+    setLoading(true); setErr(null);
+
+    // 1) škole + kandidat
+    const [{ data: sc }, { data: c, error: candErr }] = await Promise.all([
+      supabase.from("schools").select("*").order("created_at", { ascending: true }),
+      supabase.from("candidates").select("*").eq("id", candId).single()
+    ]);
+
+    if (candErr) {
+      setErr(candErr.message);
       setLoading(false);
-    })();
-  }, [candId]);
+      return;
+    }
+
+    setSchools(sc ?? []);
+    const cand = c as Candidate;
+    if (!cand.phone) cand.phone = null;
+
+    // 2) poslednji teorijski ispit kandidata (ako postoji)
+    const { data: exRows, error: exErr } = await supabase
+      .from("candidate_exams")
+      .select("exam_date, passed")
+      .eq("candidate_id", candId)
+      .order("exam_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    // 3) ako postoji ispit → prefill; inače ostavi postojeće vrednosti iz kandidata
+    const last = exRows && exRows.length > 0 ? exRows[0] as { exam_date: string; passed: boolean } : null;
+
+    setForm({
+      ...cand,
+      exam_date: last ? last.exam_date : cand.exam_date,
+      exam_passed: last ? last.passed : cand.exam_passed
+    });
+
+    setLoading(false);
+  })();
+}, [candId]);
+
 
   function update<K extends keyof Candidate>(key: K, value: Candidate[K]) {
     if (!form) return;

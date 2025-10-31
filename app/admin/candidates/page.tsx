@@ -1,6 +1,6 @@
 // file: app/admin/candidates/page.tsx
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import AdminGuard from "@/components/AdminGuard";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -19,6 +19,10 @@ type Candidate = {
   last_lesson_date: string | null;
   school?: { name: string } | null;
 };
+type LatestExam = { passed: boolean; exam_date: string };
+type ExamFilter = "" | "passed" | "failed" | "unknown";
+
+
 
 function formatPhone(v?: string | null) {
   if (!v) return "–";
@@ -26,21 +30,18 @@ function formatPhone(v?: string | null) {
   // grupisanje radi čitljivosti (nema striktne validacije)
   return only.replace(/^(\+?\d{1,3})(\d{2,3})(\d{3})(\d+)$/, "$1 $2 $3 $4");
 }
-function examBadge(passed: boolean | null, date?: string | null) {
-  const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs";
-  if (passed === true) return <span className={`${base} bg-green-100 text-green-800`}>Položen{date ? ` • ${date}` : ""}</span>;
-  if (passed === false) return <span className={`${base} bg-red-100 text-red-800`}>Nije položen{date ? ` • ${date}` : ""}</span>;
-  return <span className={`${base} bg-gray-100 text-gray-700`}>Nije zadato</span>;
-}
+
+
 
 export default function CandidatesPage() {
   const [schools, setSchools] = useState<School[]>([]);
   const [cands, setCands] = useState<Candidate[]>([]);
   const [schoolFilter, setSchoolFilter] = useState<number | "">("");
-  const [examFilter, setExamFilter] = useState<"" | "true" | "false">("");
+  const [examFilter, setExamFilter] = useState<ExamFilter>("");
   const [idSearch, setIdSearch] = useState("");
   const [nameSearch, setNameSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [latestByCand, setLatestByCand] = useState<Record<number, LatestExam>>({});
   const router = useRouter();
 
   useEffect(() => {
@@ -50,6 +51,99 @@ export default function CandidatesPage() {
       setSchools(data ?? []);
     })();
   }, []);
+
+  useEffect(() => {
+  const sb = supabaseBrowser();
+  (async () => {
+    try {
+      const { data, error } = await sb
+        .from("candidate_exams")
+        .select("candidate_id, exam_date, passed, created_at")
+        .order("exam_date", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+
+      const map: Record<number, LatestExam> = {};
+      for (const row of (data ?? [])) {
+        const cid = (row as any).candidate_id as number;
+        const exd = (row as any).exam_date as string;
+        const pas = !!(row as any).passed;
+        // uzlazno sortiranje ⇒ poslednji viđeni po kandidatu = najnoviji
+        map[cid] = { passed: pas, exam_date: exd };
+      }
+      setLatestByCand(map);
+    } catch {
+      setLatestByCand({});
+    }
+  })();
+}, []);
+
+// dodajte UNUTAR CandidatesPage()
+function decidedPassed(c: Candidate): true | false | null {
+  const latest = latestByCand[c.id];
+  if (latest !== undefined) return latest.passed ? true : false;
+  if (c.exam_passed === null || c.exam_passed === undefined) return null;
+  return !!c.exam_passed;
+}
+
+// dodajte UNUTAR CandidatesPage(), npr. ispod state-ova i efekata
+const visible = useMemo(() => {
+  const nameTerm = (nameSearch || "").trim().toLowerCase();
+  const idTerm = (idSearch || "").trim().toLowerCase();
+
+  return cands.filter((c) => {
+    // škola
+    if (schoolFilter && c.school_id !== schoolFilter) return false;
+
+    // status po poslednjem ispitu
+    const st = decidedPassed(c);
+    if (examFilter === "passed" && st !== true) return false;
+    if (examFilter === "failed" && st !== false) return false;
+    if (examFilter === "unknown" && st !== null) return false;
+
+    // tekst pretrage (ime/prezime)
+    if (nameTerm) {
+      const full = `${c.first_name} ${c.last_name}`.toLowerCase();
+      if (!full.includes(nameTerm)) return false;
+    }
+    // pretraga po ID
+    if (idTerm) {
+      const idv = (c.id_number || "").toLowerCase();
+      if (!idv.includes(idTerm)) return false;
+    }
+
+    return true;
+  });
+}, [cands, schoolFilter, examFilter, nameSearch, idSearch, latestByCand]);
+
+
+function examBadge(passedFromCandidate: boolean | null, dateFromCandidate?: string | null, candidateId?: number) {
+  const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs";
+
+  // 1) Prioritet: poslednji ispit iz candidate_exams (ako postoji)
+  const latest = candidateId !== undefined ? latestByCand[candidateId] : undefined;
+  const decidedPassed =
+    latest !== undefined
+      ? latest.passed
+      : (passedFromCandidate === null || passedFromCandidate === undefined ? null : !!passedFromCandidate);
+
+  const decidedDate =
+    latest !== undefined
+      ? latest.exam_date
+      : (dateFromCandidate ?? null);
+
+  if (decidedPassed === true) {
+    return <span className={`${base} bg-green-100 text-green-800`}>Položen{decidedDate ? ` • ${decidedDate}` : ""}</span>;
+  }
+  if (decidedPassed === false) {
+    return <span className={`${base} bg-red-100 text-red-800`}>Nije položen{decidedDate ? ` • ${decidedDate}` : ""}</span>;
+  }
+  return <span className={`${base} bg-gray-100 text-gray-700`}>Nije zadato</span>;
+}
+
+
+
+
 
   async function load() {
     setLoading(true);
@@ -62,7 +156,6 @@ export default function CandidatesPage() {
       .order("created_at", { ascending: true });
 
     if (schoolFilter) q = q.eq("school_id", schoolFilter);
-    if (examFilter !== "") q = q.eq("exam_passed", examFilter === "true");
     if (idSearch.trim()) q = q.ilike("id_number", `%${idSearch.trim()}%`);
     if (nameSearch.trim()) {
       const t = nameSearch.trim();
@@ -112,10 +205,15 @@ export default function CandidatesPage() {
           </div>
           <div>
             <label className="text-sm block mb-1">Teorijski ispit</label>
-            <select className="border rounded p-2 w-full" value={examFilter} onChange={e=>setExamFilter(e.target.value as any)}>
+            <select
+              className="w-full border rounded p-2"
+              value={examFilter}
+              onChange={(e) => setExamFilter(e.target.value as ExamFilter)}
+            >
               <option value="">Svi</option>
-              <option value="true">Položen</option>
-              <option value="false">Nije položen</option>
+              <option value="passed">Položen</option>
+              <option value="failed">Nije položen</option>
+              <option value="unknown">Nije zadato</option>
             </select>
           </div>
           <div className="md:col-span-5 flex gap-2">
@@ -124,17 +222,17 @@ export default function CandidatesPage() {
           </div>
         </div>
 
-        <div className="text-sm text-gray-700">Ukupno kandidata: <span className="font-semibold">{cands.length}</span></div>
+        <div className="text-sm text-gray-700">Ukupno kandidata: <span className="font-semibold">{visible.length}</span></div>
 
         {/* Lista kandidata - novi dizajn */}
         <div className="space-y-3">
-          {cands.map(c => (
+          {visible.map(c => (
             <div key={c.id} className="bg-white rounded-xl shadow p-4">
               {/* Header */}
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-base font-semibold leading-tight">{c.first_name} {c.last_name}</h3>
-                  <div className="mt-1">{examBadge(c.exam_passed, c.exam_date)}</div>
+                  <div className="mt-1">{examBadge(c.exam_passed, c.exam_date, c.id)}</div>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button
