@@ -21,3 +21,6 @@ Thumbs.db
 
 # misc
 coverage/
+
+# Storage backupi
+storage-backup/
