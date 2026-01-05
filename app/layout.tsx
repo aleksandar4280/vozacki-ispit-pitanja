@@ -16,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/admin/candidates/new">Novi kandidat</Link>
               <Link href="/pogresna">Pogrešno odgovorena pitanja</Link>
               <Link href="/simulacije">Simulacije</Link>
+              <Link href="/admin/raspored">Raspored</Link>
               <Link href="/login">Prijava</Link>
             </div>
           </nav>

@@ -28,6 +28,9 @@ export default function SimulacijePage() {
     <div className="max-w-3xl mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Simulacije</h1>
+        <Link href="/simulacije/sve" className="border rounded px-3 py-2">
+  Sve simulacije
+</Link>
         <Link href="/simulacije/new" className="border rounded px-3 py-2">Nova simulacija</Link>
       </div>
 

@@ -15,6 +15,55 @@ type Question = {
   answers: Answer[];
 };
 
+async function findDuplicateSimulation(
+  sb: ReturnType<typeof supabaseBrowser>,
+  newIdsSorted: number[]
+): Promise<number | null> {
+  if (newIdsSorted.length !== 41) return null;
+
+  // A) pronađi simulacije čiji su SVA njihova pitanja u našem
+  const { data: inRows, error: eIn } = await sb
+    .from("simulation_questions")
+    .select("simulation_id, question_id")
+    .in("question_id", newIdsSorted);
+  if (eIn) throw eIn;
+
+  const inCount = new Map<number, Set<number>>();
+  for (const r of inRows ?? []) {
+    const set = inCount.get(r.simulation_id) ?? new Set<number>();
+    set.add(r.question_id);
+    inCount.set(r.simulation_id, set);
+  }
+  const candidates = [...inCount.entries()]
+    .filter(([, set]) => set.size === 41)
+    .map(([simId]) => simId);
+
+  if (candidates.length === 0) return null;
+
+  // B) proveri da kandidati NEMAJU drugih pitanja (ukupno tačno 41)
+  const { data: allRows, error: eAll } = await sb
+    .from("simulation_questions")
+    .select("simulation_id, question_id")
+    .in("simulation_id", candidates);
+  if (eAll) throw eAll;
+
+  const totalCount = new Map<number, Set<number>>();
+  for (const r of allRows ?? []) {
+    const set = totalCount.get(r.simulation_id) ?? new Set<number>();
+    set.add(r.question_id);
+    totalCount.set(r.simulation_id, set);
+  }
+
+  for (const simId of candidates) {
+    if ((totalCount.get(simId)?.size ?? 0) === 41) {
+      // identičan skup (pošto su svi njihovi ID-jevi u našem + ukupno 41)
+      return simId;
+    }
+  }
+  return null;
+}
+
+
 function formatTacni(count: number): string {
   if (count === 1) return "Jedan tačan";
   const mod10 = count % 10, mod100 = count % 100;
@@ -186,56 +235,45 @@ useEffect(() => {
   const ready = count === 41;
 
   async function save() {
-    if (!ready) {
-      alert("Potrebno je tačno 41 pitanje i zbir bodova 100.");
+  if (!ready) {
+    alert("Potrebno je tačno 41 pitanje i zbir bodova 100.");
+    return;
+  }
+  const sb = supabaseBrowser();
+
+  // sortiran fingerprint novih 41 ID-jeva
+  const newIds = picked.map(q => q.id).sort((a, b) => a - b);
+
+  try {
+    const dupId = await findDuplicateSimulation(sb, newIds);
+    if (dupId) {
+      alert(`Simulacija sa istim skupom pitanja već postoji (ID: ${dupId}). Nova nije sačuvana.`);
       return;
     }
-    const sb = supabaseBrowser();
-
-    // Duplikat (isti skup 41 pitanja – redosled nije bitan)
-    const newIds = picked.map((q) => q.id).sort((a, b) => a - b);
-    const newFp = newIds.join(",");
-
-    const { data: allPairs, error: e0 } = await sb
-      .from("simulation_questions")
-      .select("simulation_id, question_id")
-      .order("simulation_id", { ascending: true });
-    if (e0) { alert(e0.message); return; }
-
-    const bySim = new Map<number, number[]>();
-    (allPairs ?? []).forEach((row: any) => {
-      const arr = bySim.get(row.simulation_id) || [];
-      arr.push(row.question_id);
-      bySim.set(row.simulation_id, arr);
-    });
-
-    for (const [simId, ids] of bySim) {
-      if (ids.length !== 41) continue;
-      const fp = ids.slice().sort((a, b) => a - b).join(",");
-      if (fp === newFp) {
-        alert(`Simulacija sa istih 41 pitanja već postoji (ID: ${simId}). Nije snimljena nova.`);
-        return;
-      }
-    }
-
-    // Insert simulacije + pitanja
-    const { data: sim, error: e1 } = await sb
-      .from("simulations")
-      .insert({ title: title.trim() || null })
-      .select("id")
-      .single();
-    if (e1) { alert(e1.message); return; }
-
-    const rows = picked.map((q, i) => ({
-      simulation_id: sim!.id,
-      question_id: q.id,
-      order_index: i,
-    }));
-    const { error: e2 } = await sb.from("simulation_questions").insert(rows);
-    if (e2) { alert(e2.message); return; }
-
-    router.push(`/simulacije/${sim!.id}`);
+  } catch (e: any) {
+    alert(e?.message ?? "Greška pri proveri duplikata.");
+    return;
   }
+
+  // upis simulacije
+  const { data: sim, error: e1 } = await sb
+    .from("simulations")
+    .insert({ title: title.trim() || null })
+    .select("id")
+    .single();
+  if (e1) { alert(e1.message); return; }
+
+  const rows = picked.map((q, i) => ({
+    simulation_id: sim!.id,
+    question_id: q.id,
+    order_index: i,
+  }));
+  const { error: e2 } = await sb.from("simulation_questions").insert(rows);
+  if (e2) { alert(e2.message); return; }
+
+  router.push(`/simulacije/${sim!.id}`);
+}
+
 
   return (
     <div className="max-w-5xl mx-auto p-4 space-y-4">
