@@ -1,0 +1,57 @@
+Svrha aplikacije: interna web aplikacija za autoškolu za vođenje baze ispitnih pitanja (MUP teorija), kandidata, teorijskih ispita, simulacija, rasporeda časova i dnevnika prisustva.
+
+Stack: Next.js (App Router) + TypeScript + Supabase (Postgres + Storage + Auth/RLS) + TailwindCSS; lokalno na localhost, opciono Vercel deploy.
+
+Auth/roles: Admin deo za unos/izmenu (guard preko AdminGuard), Supabase RLS politike (često uzrok grešaka ako nisu podešene).
+
+Storage: Supabase bucket question-images (Public) za slike pitanja; image_url se čuva u questions.
+
+Folder struktura (glavno):
+
+app/ (rute, page.tsx)
+
+components/ (UI: AdminGuard, QuestionCard/Modal, itd.)
+
+lib/ (Supabase client helper: supabaseBrowser, utili)
+
+scripts/ (backup storage skripta, export/backup)
+
+Ključne rute (pitanja):
+
+/admin (admin meni)
+
+/admin/questions/new (unos pitanja)
+
+/pregled (pregled + filtriranje oblast/podoblast + global search)
+
+edit pitanja kroz modal/dugme “Izmeni” (na listama i na simulaciji).
+
+Modeli (pitanja): areas, subareas, questions (text, points, multi_correct, image_url, mup_id), answers (question_id, text, is_correct).
+
+Pregled pitanja UI: “QuestionCard” layout — tekst levo, slika desno (ako postoji), odgovori ispod; dugme “Prikaži tačan odgovor” zazeleni tačne odgovore; ako nema slike, tekst ide full-width.
+
+Import/automatizacija pitanja: Tampermonkey userscript koji skuplja pitanja u JSON (bez “Objašnjenje …”), opcije clear set, auto-next, auto-add; /admin/import prima JSON i ubacuje bez provere duplikata.
+
+Kandidati (rute):
+
+/admin/candidates (lista + pretraga + filteri: autoškola, ispit status)
+
+/admin/candidates/new (unos)
+
+/admin/candidates/[id] (izmena + teorijski ispiti).
+
+Modeli (kandidati): candidates (ime, prezime, id_number, phone, school_id, first_lesson_date, last_lesson_date, not_my_candidate, itd.), schools.
+
+Teorijski ispiti po kandidatu: candidate_exams (exam_date, score, passed) + candidate_exam_wrong_questions (exam_id, question_id). U edit kandidata: pregled ispita + modal za novi ispit + izbor pogrešnih pitanja.
+
+Pogrešna pitanja globalno: stranica “Pogrešno odgovorena pitanja” agregira candidate_exam_wrong_questions, prikazuje jedinstvena pitanja, filter oblast/podoblast i filter po “koliko puta pogrešeno” (1, 2 tačno, 3+).
+
+Simulacije (MUP): /simulacije lista + “Nova simulacija” (/simulacije/new) — ručni unos 41 pitanja (cilj 100 poena, ali može save i ako nije 100 uz poruku), pretraga po tekstu pitanja i po tekstu odgovora, prikaz pitanja sa odgovorima radi lakšeg prepoznavanja.
+
+Modeli (simulacije): simulations + simulation_questions (simulation_id, question_id, order_index). Dodata provera duplikata (isti skup 41 pitanja bez obzira na redosled) + stranica /duplikati-simulacije.
+
+Rasporedi i dnevnik:
+
+/raspored + /raspored/new (raspored do 3 časa, automatsko računanje start/end po 45min + 10min pauza; izbor časova kroz modal; specijalna spajanja tema: T6-1+T8-1, T10-1+T11-1, P-T2-1+P-T9-1; izbor autoškole + filter po autoškoli)
+
+/admin/dnevnik + /admin/dnevnik/new + /admin/dnevnik/[id] (dnevnik prisustva, izbor rasporeda po datumu, evidencija checkboxes po časovima; prisustvo se čuva u journal_attendance sa lesson_id).

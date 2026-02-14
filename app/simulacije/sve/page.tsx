@@ -19,8 +19,6 @@ type QMeta = {
 };
 type SQ = { simulation_id: number; question_id: number };
 
-type GroupCount = { key: number | null; count: number };
-
 export default function AllSimulationQuestionsPage() {
   const sb = supabaseBrowser();
 
@@ -45,96 +43,124 @@ export default function AllSimulationQuestionsPage() {
 
   useEffect(() => {
     (async () => {
-      setLoading(true); setErr(null);
+      setLoading(true); 
+      setErr(null);
       try {
-        // 1) parovi simulacija↔pitanje (za frekvenciju / skup)
-        const { data: sq } = await sb
-          .from("simulation_questions")
-          .select("simulation_id, question_id")
-          .returns<SQ[]>();
+        // 1) Učitaj SVE parove simulacija↔pitanje u batch-evima
+        const allPairs: SQ[] = [];
+        let from = 0;
+        const batchSize = 1000;
+        
+        while (true) {
+          const { data: batch, error } = await sb
+            .from("simulation_questions")
+            .select("simulation_id, question_id")
+            .range(from, from + batchSize - 1);
+          
+          if (error) throw error;
+          if (!batch || batch.length === 0) break;
+          
+          allPairs.push(...batch);
+          
+          if (batch.length < batchSize) break; // zadnji batch
+          from += batchSize;
+        }
 
         // 2) šifrarnici
         const [{ data: ars }, { data: sbs }] = await Promise.all([
-          sb.from("areas").select("id,name").order("created_at", { ascending: true }).returns<Area[]>(),
-          sb.from("subareas").select("id,name,area_id").order("created_at", { ascending: true }).returns<Subarea[]>(),
+          sb.from("areas").select("id,name").order("created_at", { ascending: true }),
+          sb.from("subareas").select("id,name,area_id").order("created_at", { ascending: true }),
         ]);
 
-        // 3) totals po oblasti/podoblasti: umesto .group() učitaj sve i saberi lokalno
-const { data: allQRows, error: allQErr } = await sb
-  .from("questions")
-  .select("id, area_id, subarea_id")
-  .returns<{ id: number; area_id: number | null; subarea_id: number | null }[]>();
+        // 3) totals po oblasti/podoblasti - učitaj SVA pitanja u batch-evima
+const allQRows: { id: number; area_id: number | null; subarea_id: number | null }[] = [];
+let qFrom = 0;
+const qBatchSize = 1000;
 
-if (allQErr) throw allQErr;
+while (true) {
+  const { data: qBatch, error: qErr } = await sb
+    .from("questions")
+    .select("id, area_id, subarea_id")
+    .range(qFrom, qFrom + qBatchSize - 1);
+  
+  if (qErr) throw qErr;
+  if (!qBatch || qBatch.length === 0) break;
+  
+  allQRows.push(...qBatch);
+  
+  if (qBatch.length < qBatchSize) break;
+  qFrom += qBatchSize;
+}
 
-const tArea = new Map<number, number>();
-const tSub  = new Map<number, number>();
+        const tArea = new Map<number, number>();
+        const tSub = new Map<number, number>();
 
-(allQRows ?? []).forEach((q) => {
-  if (q.area_id != null) {
-    tArea.set(q.area_id, (tArea.get(q.area_id) ?? 0) + 1);
+        (allQRows ?? []).forEach((q) => {
+          if (q.area_id != null) {
+            tArea.set(q.area_id, (tArea.get(q.area_id) ?? 0) + 1);
+          }
+          if (q.subarea_id != null) {
+            tSub.set(q.subarea_id, (tSub.get(q.subarea_id) ?? 0) + 1);
+          }
+        });
+
+        // 4) unique-on-sims po oblasti/podoblasti
+// Koristi iste podatke iz koraka 3 - već imamo allQRows
+const questionMap = new Map<number, { area_id: number | null; subarea_id: number | null }>();
+allQRows.forEach(q => {
+  questionMap.set(q.id, { area_id: q.area_id, subarea_id: q.subarea_id });
+});
+
+
+
+// Iz allPairs izvuci unique question_id-eve i grupiši po oblastima
+const uniqArea = new Map<number, Set<number>>();
+const uniqSub = new Map<number, Set<number>>();
+
+const uniqueQuestionIds = new Set(allPairs.map(p => p.question_id));
+
+uniqueQuestionIds.forEach(qId => {
+  const meta = questionMap.get(qId);
+  if (!meta) return;
+  
+  if (meta.area_id != null) {
+    const set = uniqArea.get(meta.area_id) ?? new Set<number>();
+    set.add(qId);
+    uniqArea.set(meta.area_id, set);
   }
-  if (q.subarea_id != null) {
-    tSub.set(q.subarea_id, (tSub.get(q.subarea_id) ?? 0) + 1);
+  
+  if (meta.subarea_id != null) {
+    const set = uniqSub.get(meta.subarea_id) ?? new Set<number>();
+    set.add(qId);
+    uniqSub.set(meta.subarea_id, set);
   }
 });
 
-//setAllQForTotals(allQRows ?? []); // ako ti dalje treba
-setTotalByArea(tArea);
-setTotalBySub(tSub);
-
-
-        // 4) unique-on-sims po oblasti/podobl: join preko questions!inner(...)
-        const [{ data: usedA }, { data: usedS }] = await Promise.all([
-          sb.from("simulation_questions")
-            .select("question_id, questions!inner(area_id)")
-            .returns<{ question_id: number; questions: { area_id: number | null } }[]>(),
-          sb.from("simulation_questions")
-            .select("question_id, questions!inner(subarea_id)")
-            .returns<{ question_id: number; questions: { subarea_id: number | null } }[]>(),
-        ]);
-
-        const uniqArea = new Map<number, Set<number>>();
-        (usedA ?? []).forEach(r => {
-          const a = r.questions?.area_id;
-          if (a == null) return;
-          const set = uniqArea.get(a) ?? new Set<number>();
-          set.add(r.question_id);
-          uniqArea.set(a, set);
-        });
-        const uniqSub = new Map<number, Set<number>>();
-        (usedS ?? []).forEach(r => {
-          const s = r.questions?.subarea_id;
-          if (s == null) return;
-          const set = uniqSub.get(s) ?? new Set<number>();
-          set.add(r.question_id);
-          uniqSub.set(s, set);
-        });
-
-        const uniqAreaCount = new Map<number, number>();
-        uniqArea.forEach((set, k) => uniqAreaCount.set(k, set.size));
-        const uniqSubCount = new Map<number, number>();
-        uniqSub.forEach((set, k) => uniqSubCount.set(k, set.size));
+const uniqAreaCount = new Map<number, number>();
+uniqArea.forEach((set, k) => uniqAreaCount.set(k, set.size));
+const uniqSubCount = new Map<number, number>();
+uniqSub.forEach((set, k) => uniqSubCount.set(k, set.size));
 
         // 5) meta pitanja + odgovori samo za korišćena pitanja
-        const usedIds = Array.from(new Set((sq ?? []).map(p => p.question_id)));
+        const usedIds = Array.from(new Set(allPairs.map(p => p.question_id)));
         let qMeta: QMeta[] = [];
+        
         if (usedIds.length > 0) {
           const chunk = <T,>(arr: T[], n: number) =>
             Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
+          
           const parts: QMeta[] = [];
           for (const ids of chunk(usedIds, 1000)) {
             const { data } = await sb
               .from("questions")
               .select("id,text,image_url,points,multi_correct,area_id,subarea_id,answers(id,text,is_correct)")
-              .in("id", ids)
-              .returns<QMeta[]>();
+              .in("id", ids);
             parts.push(...(data ?? []));
           }
           qMeta = parts;
         }
 
-        setPairs(sq ?? []);
+        setPairs(allPairs);
         setAreas(ars ?? []);
         setSubs(sbs ?? []);
         setQuestions(qMeta);
@@ -142,13 +168,21 @@ setTotalBySub(tSub);
         setTotalBySub(tSub);
         setUniqOnSimsByArea(uniqAreaCount);
         setUniqOnSimsBySub(uniqSubCount);
+
+        console.log('Debug info:', {
+  totalPairs: allPairs.length,
+  uniqueQuestionIds: uniqueQuestionIds.size,
+  uniqAreaCount: Object.fromEntries(uniqAreaCount),
+  totalByArea: Object.fromEntries(tArea),
+  firstAreaName: ars?.[0]?.name,
+  firstAreaId: ars?.[0]?.id,
+});
       } catch (e: any) {
         setErr(e?.message || "Greška pri učitavanju podataka.");
       } finally {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // frekvencija pojavljivanja po pitanju (koliko simulacija ga sadrži)
@@ -176,7 +210,9 @@ setTotalBySub(tSub);
   return (
     <AdminGuard>
       <div className="max-w-6xl mx-auto p-4 space-y-4">
-        <h1 className="text-xl font-semibold">Sva pitanja sa svih simulacija</h1>
+        <h1 className="text-xl font-semibold">
+  Sva pitanja sa svih simulacija ({new Set(pairs.map(p => p.question_id)).size}/{pairs.length})
+</h1>
 
         {/* Filtri */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -195,7 +231,6 @@ setTotalBySub(tSub);
               {areas.map(a => {
                 const u = uniqOnSimsByArea.get(a.id) ?? 0;
                 const t = totalByArea.get(a.id) ?? 0;
-                // osiguranje: unik <= total
                 const safeU = Math.min(u, t);
                 return (
                   <option key={a.id} value={a.id}>
