@@ -1,184 +1,235 @@
 // file: app/admin/candidates/page.tsx
-"use client";
-import { useEffect, useState, useMemo } from "react";
-import AdminGuard from "@/components/AdminGuard";
-import { supabaseBrowser } from "@/lib/supabaseClient";
-import { useRouter } from "next/navigation";
+'use client'
+import { useEffect, useState, useMemo } from 'react'
+import AdminGuard from '@/components/AdminGuard'
+import { supabaseBrowser } from '@/lib/supabaseClient'
+import { useRouter } from 'next/navigation'
 
-type School = { id: number; name: string };
+type School = { id: number; name: string }
 type Candidate = {
-  id: number;
-  first_name: string;
-  last_name: string;
-  id_number: string;
-  phone: string | null;
-  school_id: number;
-  exam_date: string | null;
-  exam_passed: boolean | null;
-  first_lesson_date: string | null;
-  last_lesson_date: string | null;
-  school?: { name: string } | null;
-};
-type LatestExam = { passed: boolean; exam_date: string };
-type ExamFilter = "" | "passed" | "failed" | "unknown";
-
-
+  id: number
+  first_name: string
+  last_name: string
+  id_number: string
+  phone: string | null
+  school_id: number
+  exam_date: string | null
+  exam_passed: boolean | null
+  first_lesson_date: string | null
+  last_lesson_date: string | null
+  school?: { name: string } | null
+}
+type LatestExam = { passed: boolean; exam_date: string }
+type ExamFilter = '' | 'passed' | 'failed' | 'unknown'
+type TOFilter = '' | 'completed' | 'in_progress'
 
 function formatPhone(v?: string | null) {
-  if (!v) return "–";
-  const only = v.replace(/[^\d+]/g, "");
-  // grupisanje radi čitljivosti (nema striktne validacije)
-  return only.replace(/^(\+?\d{1,3})(\d{2,3})(\d{3})(\d+)$/, "$1 $2 $3 $4");
+  if (!v) return '–'
+  const only = v.replace(/[^\d+]/g, '')
+  return only.replace(/^(\+?\d{1,3})(\d{2,3})(\d{3})(\d+)$/, '$1 $2 $3 $4')
 }
-
-
 
 export default function CandidatesPage() {
-  const [schools, setSchools] = useState<School[]>([]);
-  const [cands, setCands] = useState<Candidate[]>([]);
-  const [schoolFilter, setSchoolFilter] = useState<number | "">("");
-  const [examFilter, setExamFilter] = useState<ExamFilter>("");
-  const [idSearch, setIdSearch] = useState("");
-  const [nameSearch, setNameSearch] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [latestByCand, setLatestByCand] = useState<Record<number, LatestExam>>({});
-  const router = useRouter();
+  const [schools, setSchools] = useState<School[]>([])
+  const [cands, setCands] = useState<Candidate[]>([])
+  const [schoolFilter, setSchoolFilter] = useState<number | ''>('')
+  const [examFilter, setExamFilter] = useState<ExamFilter>('')
+  const [toFilter, setToFilter] = useState<TOFilter>('')
+  const [idSearch, setIdSearch] = useState('')
+  const [nameSearch, setNameSearch] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [latestByCand, setLatestByCand] = useState<Record<number, LatestExam>>(
+    {}
+  )
+  const [lessonCountByCand, setLessonCountByCand] = useState<
+    Record<number, number>
+  >({})
+  const router = useRouter()
 
   useEffect(() => {
-    const supabase = supabaseBrowser();
-    (async () => {
-      const { data } = await supabase.from("schools").select("*").order("created_at", { ascending: true });
-      setSchools(data ?? []);
-    })();
-  }, []);
+    const supabase = supabaseBrowser()
+    ;(async () => {
+      const { data } = await supabase
+        .from('schools')
+        .select('*')
+        .order('created_at', { ascending: true })
+      setSchools(data ?? [])
+    })()
+  }, [])
 
   useEffect(() => {
-  const sb = supabaseBrowser();
-  (async () => {
-    try {
-      const { data, error } = await sb
-        .from("candidate_exams")
-        .select("candidate_id, exam_date, passed, created_at")
-        .order("exam_date", { ascending: true })
-        .order("created_at", { ascending: true });
-      if (error) throw error;
+    const sb = supabaseBrowser()
+    ;(async () => {
+      try {
+        const { data, error } = await sb
+          .from('candidate_exams')
+          .select('candidate_id, exam_date, passed, created_at')
+          .order('exam_date', { ascending: true })
+          .order('created_at', { ascending: true })
+        if (error) throw error
 
-      const map: Record<number, LatestExam> = {};
-      for (const row of (data ?? [])) {
-        const cid = (row as any).candidate_id as number;
-        const exd = (row as any).exam_date as string;
-        const pas = !!(row as any).passed;
-        // uzlazno sortiranje ⇒ poslednji viđeni po kandidatu = najnoviji
-        map[cid] = { passed: pas, exam_date: exd };
+        const map: Record<number, LatestExam> = {}
+        for (const row of data ?? []) {
+          const cid = (row as any).candidate_id as number
+          const exd = (row as any).exam_date as string
+          const pas = !!(row as any).passed
+          map[cid] = { passed: pas, exam_date: exd }
+        }
+        setLatestByCand(map)
+      } catch {
+        setLatestByCand({})
       }
-      setLatestByCand(map);
-    } catch {
-      setLatestByCand({});
-    }
-  })();
-}, []);
+    })()
+  }, [])
 
-// dodajte UNUTAR CandidatesPage()
-function decidedPassed(c: Candidate): true | false | null {
-  const latest = latestByCand[c.id];
-  if (latest !== undefined) return latest.passed ? true : false;
-  if (c.exam_passed === null || c.exam_passed === undefined) return null;
-  return !!c.exam_passed;
-}
+  // Učitaj broj časova iz view-a
+  useEffect(() => {
+    const sb = supabaseBrowser()
+    ;(async () => {
+      try {
+        const { data, error } = await sb
+          .from('candidate_lesson_counts')
+          .select('candidate_id, lesson_count')
 
-// dodajte UNUTAR CandidatesPage(), npr. ispod state-ova i efekata
-const visible = useMemo(() => {
-  const nameTerm = (nameSearch || "").trim().toLowerCase();
-  const idTerm = (idSearch || "").trim().toLowerCase();
+        if (error) throw error
 
-  return cands.filter((c) => {
-    // škola
-    if (schoolFilter && c.school_id !== schoolFilter) return false;
+        const countMap: Record<number, number> = {}
+        ;(data ?? []).forEach((row: any) => {
+          countMap[row.candidate_id] = row.lesson_count
+        })
 
-    // status po poslednjem ispitu
-    const st = decidedPassed(c);
-    if (examFilter === "passed" && st !== true) return false;
-    if (examFilter === "failed" && st !== false) return false;
-    if (examFilter === "unknown" && st !== null) return false;
+        setLessonCountByCand(countMap)
+      } catch (err) {
+        console.error('❌ Greška pri učitavanju lesson counts:', err)
+        setLessonCountByCand({})
+      }
+    })()
+  }, [])
 
-    // tekst pretrage (ime/prezime)
-    if (nameTerm) {
-      const full = `${c.first_name} ${c.last_name}`.toLowerCase();
-      if (!full.includes(nameTerm)) return false;
-    }
-    // pretraga po ID
-    if (idTerm) {
-      const idv = (c.id_number || "").toLowerCase();
-      if (!idv.includes(idTerm)) return false;
-    }
-
-    return true;
-  });
-}, [cands, schoolFilter, examFilter, nameSearch, idSearch, latestByCand]);
-
-
-function examBadge(passedFromCandidate: boolean | null, dateFromCandidate?: string | null, candidateId?: number) {
-  const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs";
-
-  // 1) Prioritet: poslednji ispit iz candidate_exams (ako postoji)
-  const latest = candidateId !== undefined ? latestByCand[candidateId] : undefined;
-  const decidedPassed =
-    latest !== undefined
-      ? latest.passed
-      : (passedFromCandidate === null || passedFromCandidate === undefined ? null : !!passedFromCandidate);
-
-  const decidedDate =
-    latest !== undefined
-      ? latest.exam_date
-      : (dateFromCandidate ?? null);
-
-  if (decidedPassed === true) {
-    return <span className={`${base} bg-green-100 text-green-800`}>Položen{decidedDate ? ` • ${decidedDate}` : ""}</span>;
+  function decidedPassed(c: Candidate): true | false | null {
+    const latest = latestByCand[c.id]
+    if (latest !== undefined) return latest.passed ? true : false
+    if (c.exam_passed === null || c.exam_passed === undefined) return null
+    return !!c.exam_passed
   }
-  if (decidedPassed === false) {
-    return <span className={`${base} bg-red-100 text-red-800`}>Nije položen{decidedDate ? ` • ${decidedDate}` : ""}</span>;
+
+  const visible = useMemo(() => {
+    const nameTerm = (nameSearch || '').trim().toLowerCase()
+    const idTerm = (idSearch || '').trim().toLowerCase()
+
+    return cands.filter((c) => {
+      // škola
+      if (schoolFilter && c.school_id !== schoolFilter) return false
+
+      // status po poslednjem ispitu
+      const st = decidedPassed(c)
+      if (examFilter === 'passed' && st !== true) return false
+      if (examFilter === 'failed' && st !== false) return false
+      if (examFilter === 'unknown' && st !== null) return false
+
+      // teorijska obuka filter
+      const lessonCount = lessonCountByCand[c.id] ?? 0
+      if (toFilter === 'completed' && lessonCount !== 43) return false
+      if (toFilter === 'in_progress' && lessonCount >= 43) return false
+
+      // tekst pretrage (ime/prezime)
+      if (nameTerm) {
+        const full = `${c.first_name} ${c.last_name}`.toLowerCase()
+        if (!full.includes(nameTerm)) return false
+      }
+      // pretraga po ID
+      if (idTerm) {
+        const idv = (c.id_number || '').toLowerCase()
+        if (!idv.includes(idTerm)) return false
+      }
+
+      return true
+    })
+  }, [
+    cands,
+    schoolFilter,
+    examFilter,
+    toFilter,
+    nameSearch,
+    idSearch,
+    latestByCand,
+    lessonCountByCand,
+  ])
+
+  function examBadge(
+    passedFromCandidate: boolean | null,
+    dateFromCandidate?: string | null,
+    candidateId?: number
+  ) {
+    const base = 'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs'
+
+    const latest =
+      candidateId !== undefined ? latestByCand[candidateId] : undefined
+    const decidedPassed =
+      latest !== undefined
+        ? latest.passed
+        : passedFromCandidate === null || passedFromCandidate === undefined
+          ? null
+          : !!passedFromCandidate
+
+    const decidedDate =
+      latest !== undefined ? latest.exam_date : (dateFromCandidate ?? null)
+
+    if (decidedPassed === true) {
+      return (
+        <span className={`${base} bg-green-100 text-green-800`}>
+          Položen{decidedDate ? ` • ${decidedDate}` : ''}
+        </span>
+      )
+    }
+    if (decidedPassed === false) {
+      return (
+        <span className={`${base} bg-red-100 text-red-800`}>
+          Nije položen{decidedDate ? ` • ${decidedDate}` : ''}
+        </span>
+      )
+    }
+    return (
+      <span className={`${base} bg-gray-100 text-gray-700`}>Nije zadato</span>
+    )
   }
-  return <span className={`${base} bg-gray-100 text-gray-700`}>Nije zadato</span>;
-}
-
-
-
-
 
   async function load() {
-    setLoading(true);
-    const supabase = supabaseBrowser();
+    setLoading(true)
+    const supabase = supabaseBrowser()
     let q = supabase
-      .from("candidates")
+      .from('candidates')
       .select(
-        "id,first_name,last_name,id_number,phone,school_id,exam_date,exam_passed,first_lesson_date,last_lesson_date,school:schools(name)"
+        'id,first_name,last_name,id_number,phone,school_id,exam_date,exam_passed,first_lesson_date,last_lesson_date,school:schools(name)'
       )
-      .order("created_at", { ascending: true });
+      .order('created_at', { ascending: true })
 
-    if (schoolFilter) q = q.eq("school_id", schoolFilter);
-    if (idSearch.trim()) q = q.ilike("id_number", `%${idSearch.trim()}%`);
+    if (schoolFilter) q = q.eq('school_id', schoolFilter)
+    if (idSearch.trim()) q = q.ilike('id_number', `%${idSearch.trim()}%`)
     if (nameSearch.trim()) {
-      const t = nameSearch.trim();
-      q = q.or(`first_name.ilike.%${t}%,last_name.ilike.%${t}%`);
+      const t = nameSearch.trim()
+      q = q.or(`first_name.ilike.%${t}%,last_name.ilike.%${t}%`)
     }
 
-    const { data, error } = await q.returns<Candidate[]>();
-    setLoading(false);
-    if (error) return console.error(error);
-    setCands(data ?? []);
+    const { data, error } = await q.returns<Candidate[]>()
+    setLoading(false)
+    if (error) return console.error(error)
+    setCands(data ?? [])
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load()
+  }, [])
 
   async function handleDelete(id: number) {
-    if (!confirm("Da li stvarno želite da obrišete kandidata?")) return;
-    const supabase = supabaseBrowser();
-    const { error } = await supabase.from("candidates").delete().eq("id", id);
+    if (!confirm('Da li stvarno želite da obrišete kandidata?')) return
+    const supabase = supabaseBrowser()
+    const { error } = await supabase.from('candidates').delete().eq('id', id)
     if (error) {
-      alert("Brisanje neuspešno: " + error.message);
-      return;
+      alert('Brisanje neuspešno: ' + error.message)
+      return
     }
-    await load();
+    await load()
   }
 
   return (
@@ -187,20 +238,42 @@ function examBadge(passedFromCandidate: boolean | null, dateFromCandidate?: stri
         <h1 className="text-xl font-semibold">Kandidati</h1>
 
         {/* Filter traka */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
           <div className="md:col-span-2">
-            <label className="text-sm block mb-1">Pretraga po imenu/prezimenu</label>
-            <input className="border rounded p-2 w-full" placeholder="npr. Marko" value={nameSearch} onChange={e=>setNameSearch(e.target.value)} />
+            <label className="text-sm block mb-1">
+              Pretraga po imenu/prezimenu
+            </label>
+            <input
+              className="border rounded p-2 w-full"
+              placeholder="npr. Marko"
+              value={nameSearch}
+              onChange={(e) => setNameSearch(e.target.value)}
+            />
           </div>
           <div>
             <label className="text-sm block mb-1">Pretraga po ID broju</label>
-            <input className="border rounded p-2 w-full" placeholder="npr. 012345" value={idSearch} onChange={e=>setIdSearch(e.target.value)} />
+            <input
+              className="border rounded p-2 w-full"
+              placeholder="npr. 012345"
+              value={idSearch}
+              onChange={(e) => setIdSearch(e.target.value)}
+            />
           </div>
           <div>
             <label className="text-sm block mb-1">Autoškola</label>
-            <select className="border rounded p-2 w-full" value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value ? Number(e.target.value) : "")}>
+            <select
+              className="border rounded p-2 w-full"
+              value={schoolFilter}
+              onChange={(e) =>
+                setSchoolFilter(e.target.value ? Number(e.target.value) : '')
+              }
+            >
               <option value="">Sve</option>
-              {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {schools.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -216,23 +289,60 @@ function examBadge(passedFromCandidate: boolean | null, dateFromCandidate?: stri
               <option value="unknown">Nije zadato</option>
             </select>
           </div>
-          <div className="md:col-span-5 flex gap-2">
-            <button className="bg-black text-white rounded px-4 py-2" onClick={load} disabled={loading}>{loading ? "Učitavanje..." : "Primeni filtere"}</button>
-            <button className="border rounded px-4 py-2" onClick={() => { setSchoolFilter(""); setExamFilter(""); setIdSearch(""); setNameSearch(""); load(); }}>Reset</button>
+          <div>
+            <label className="text-sm block mb-1">Teorijska obuka</label>
+            <select
+              className="w-full border rounded p-2"
+              value={toFilter}
+              onChange={(e) => setToFilter(e.target.value as TOFilter)}
+            >
+              <option value="">Sve</option>
+              <option value="completed">Završio TO</option>
+              <option value="in_progress">TO u toku</option>
+            </select>
+          </div>
+          <div className="md:col-span-6 flex gap-2">
+            <button
+              className="bg-black text-white rounded px-4 py-2"
+              onClick={load}
+              disabled={loading}
+            >
+              {loading ? 'Učitavanje...' : 'Primeni filtere'}
+            </button>
+            <button
+              className="border rounded px-4 py-2"
+              onClick={() => {
+                setSchoolFilter('')
+                setExamFilter('')
+                setToFilter('')
+                setIdSearch('')
+                setNameSearch('')
+                load()
+              }}
+            >
+              Reset
+            </button>
           </div>
         </div>
 
-        <div className="text-sm text-gray-700">Ukupno kandidata: <span className="font-semibold">{visible.length}</span></div>
+        <div className="text-sm text-gray-700">
+          Ukupno kandidata:{' '}
+          <span className="font-semibold">{visible.length}</span>
+        </div>
 
         {/* Lista kandidata - novi dizajn */}
         <div className="space-y-3">
-          {visible.map(c => (
+          {visible.map((c) => (
             <div key={c.id} className="bg-white rounded-xl shadow p-4">
               {/* Header */}
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-semibold leading-tight">{c.first_name} {c.last_name}</h3>
-                  <div className="mt-1">{examBadge(c.exam_passed, c.exam_date, c.id)}</div>
+                  <h3 className="text-base font-semibold leading-tight">
+                    {c.first_name} {c.last_name}
+                  </h3>
+                  <div className="mt-1">
+                    {examBadge(c.exam_passed, c.exam_date, c.id)}
+                  </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button
@@ -267,7 +377,9 @@ function examBadge(passedFromCandidate: boolean | null, dateFromCandidate?: stri
 
                   <div>
                     <div className="text-xs text-gray-500">Autoškola</div>
-                    <div className="font-medium whitespace-pre-line">{c.school?.name ?? "–"}</div>
+                    <div className="font-medium whitespace-pre-line">
+                      {c.school?.name ?? '–'}
+                    </div>
                   </div>
                 </div>
 
@@ -275,23 +387,28 @@ function examBadge(passedFromCandidate: boolean | null, dateFromCandidate?: stri
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <div className="text-xs text-gray-500">Prvi čas</div>
-                    <div className="font-medium">{c.first_lesson_date ?? "–"}</div>
+                    <div className="font-medium">
+                      {c.first_lesson_date ?? '–'}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Poslednji čas</div>
-                    <div className="font-medium">{c.last_lesson_date ?? "–"}</div>
+                    <div className="font-medium">
+                      {c.last_lesson_date ?? '–'}
+                    </div>
                   </div>
-                  {/* Rezervisano za dodatna polja u budućnosti */}
                 </div>
               </div>
             </div>
           ))}
 
           {cands.length === 0 && (
-            <div className="bg-white rounded-xl shadow p-6 text-sm text-gray-600">Nema rezultata.</div>
+            <div className="bg-white rounded-xl shadow p-6 text-sm text-gray-600">
+              Nema rezultata.
+            </div>
           )}
         </div>
       </div>
     </AdminGuard>
-  );
+  )
 }

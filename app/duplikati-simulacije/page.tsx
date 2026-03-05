@@ -1,65 +1,65 @@
 // file: app/duplikati-simulacije/page.tsx
-"use client";
+'use client'
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { supabaseBrowser } from "@/lib/supabaseClient";
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { supabaseBrowser } from '@/lib/supabaseClient'
 
 type SimRow = {
-  id: number;
-  simulation_questions: { question_id: number }[];
-};
+  id: number
+  simulation_questions: { question_id: number }[]
+}
 
 export default function DuplikatiSimulacijePage() {
-  const [rows, setRows] = useState<SimRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
+  const [rows, setRows] = useState<SimRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
-    const sb = supabaseBrowser();
-    (async () => {
-      setLoading(true);
-      setErr(null);
+    const sb = supabaseBrowser()
+    ;(async () => {
+      setLoading(true)
+      setErr(null)
       const { data, error } = await sb
-        .from("simulations")
-        .select("id, simulation_questions(question_id)")
-        .order("id", { ascending: true })
-        .returns<SimRow[]>();
-      if (error) setErr(error.message);
-      setRows(data ?? []);
-      setLoading(false);
-    })();
-  }, []);
+        .from('simulations')
+        .select('id, simulation_questions(question_id)')
+        .order('id', { ascending: true })
+        .returns<SimRow[]>()
+      if (error) setErr(error.message)
+      setRows(data ?? [])
+      setLoading(false)
+    })()
+  }, [])
 
   const result = useMemo(() => {
     // key = sortirani skup 41 question_id (CSV)
-    const byKey = new Map<string, number[]>();
-    const skipped: number[] = [];
+    const byKey = new Map<string, number[]>()
+    const skipped: number[] = []
 
     for (const s of rows) {
       const ids = Array.from(
         new Set((s.simulation_questions ?? []).map((q) => q.question_id))
-      ).sort((a, b) => a - b);
+      ).sort((a, b) => a - b)
 
       if (ids.length !== 41) {
         // ignorišemo simulacije koje nisu kompletne (po zahtevu)
-        skipped.push(s.id);
-        continue;
+        skipped.push(s.id)
+        continue
       }
 
-      const key = ids.join(",");
-      const list = byKey.get(key);
-      if (list) list.push(s.id);
-      else byKey.set(key, [s.id]);
+      const key = ids.join(',')
+      const list = byKey.get(key)
+      if (list) list.push(s.id)
+      else byKey.set(key, [s.id])
     }
 
     const groups = Array.from(byKey.entries())
       .map(([key, sims]) => ({ key, sims: sims.sort((a, b) => a - b) }))
       .filter((g) => g.sims.length > 1) // samo duplikati
-      .sort((a, b) => a.sims[0] - b.sims[0]);
+      .sort((a, b) => a.sims[0] - b.sims[0])
 
-    return { groups, skipped };
-  }, [rows]);
+    return { groups, skipped }
+  }, [rows])
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-4">
@@ -71,11 +71,11 @@ export default function DuplikatiSimulacijePage() {
       {!loading && !err && (
         <>
           <div className="text-sm text-gray-700">
-            Ukupno simulacija: <b>{rows.length}</b> •
-            Grupe duplikata: <b>{result.groups.length}</b>
+            Ukupno simulacija: <b>{rows.length}</b> • Grupe duplikata:{' '}
+            <b>{result.groups.length}</b>
             {result.skipped.length > 0 && (
               <span className="ml-2 text-gray-500">
-                (preskočeno jer nemaju 41 pitanje: {result.skipped.join(", ")})
+                (preskočeno jer nemaju 41 pitanje: {result.skipped.join(', ')})
               </span>
             )}
           </div>
@@ -111,5 +111,5 @@ export default function DuplikatiSimulacijePage() {
         </>
       )}
     </div>
-  );
+  )
 }

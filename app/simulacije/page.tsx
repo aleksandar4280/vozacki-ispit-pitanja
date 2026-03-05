@@ -1,37 +1,39 @@
 // file: app/simulacije/page.tsx
-"use client";
+'use client'
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabaseClient";
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { supabaseBrowser } from '@/lib/supabaseClient'
 
-type Simulation = { id: number; title: string | null; created_at: string };
+type Simulation = { id: number; title: string | null; created_at: string }
 
 export default function SimulacijePage() {
-  const [sims, setSims] = useState<Simulation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sims, setSims] = useState<Simulation[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const sb = supabaseBrowser();
-    (async () => {
+    const sb = supabaseBrowser()
+    ;(async () => {
       const { data } = await sb
-        .from("simulations")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .returns<Simulation[]>();
-      setSims(data ?? []);
-      setLoading(false);
-    })();
-  }, []);
+        .from('simulations')
+        .select('*')
+        .order('created_at', { ascending: true })
+        .returns<Simulation[]>()
+      setSims(data ?? [])
+      setLoading(false)
+    })()
+  }, [])
 
   return (
     <div className="max-w-3xl mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Simulacije</h1>
         <Link href="/simulacije/sve" className="border rounded px-3 py-2">
-  Sve simulacije
-</Link>
-        <Link href="/simulacije/new" className="border rounded px-3 py-2">Nova simulacija</Link>
+          Sve simulacije
+        </Link>
+        <Link href="/simulacije/new" className="border rounded px-3 py-2">
+          Nova simulacija
+        </Link>
       </div>
 
       {loading && <div>Učitavanje…</div>}
@@ -52,5 +54,5 @@ export default function SimulacijePage() {
         )}
       </div>
     </div>
-  );
+  )
 }
