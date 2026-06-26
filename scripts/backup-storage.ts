@@ -23,7 +23,7 @@ const SERVICE_KEY =
   '' // fallback (radi samo ako policy dozvoljava)
 
 const BUCKET = process.env.BUCKET_NAME || 'question-images'
-const OUT_DIR = process.env.OUT_DIR || 'storage-backup'
+const OUT_DIR = process.env.OUT_DIR || 'storage-backup-2'
 
 // Bolja poruka ako fali nešto
 if (!SUPABASE_URL) {
@@ -42,17 +42,30 @@ if (!SERVICE_KEY) {
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
 
 /** Rekurzivno listaj sve fajlove u bucket-u. */
+/** Rekurzivno listaj sve fajlove u bucket-u sa paginacijom. */
 async function listAll(prefix = '', acc: string[] = []): Promise<string[]> {
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .list(prefix, { limit: 1000 })
-  if (error) throw error
-
-  for (const item of data || []) {
-    const rel = prefix ? `${prefix}/${item.name}` : item.name
-    if (item.id) acc.push(rel)
-    else await listAll(rel, acc)
+  let offset = 0
+  const limit = 1000 // Supabase max
+  
+  while (true) {
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .list(prefix, { limit, offset })
+    
+    if (error) throw error
+    if (!data || data.length === 0) break
+    
+    for (const item of data) {
+      const rel = prefix ? `${prefix}/${item.name}` : item.name
+      if (item.id) acc.push(rel) // fajl
+      else await listAll(rel, acc) // folder - rekurzija
+    }
+    
+    // Ako je vraćeno manje od limit, nema više rezultata
+    if (data.length < limit) break
+    offset += limit
   }
+  
   return acc
 }
 

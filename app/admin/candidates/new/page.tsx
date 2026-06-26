@@ -18,6 +18,7 @@ export default function NewCandidatePage() {
   const [firstLesson, setFirstLesson] = useState<string>('')
   const [lastLesson, setLastLesson] = useState<string>('')
   const [notMyCandidate, setNotMyCandidate] = useState<boolean>(false)
+  const [category, setCategory] = useState<'B' | 'A' | 'A1' | 'A2'>('B')
 
   const [err, setErr] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
@@ -61,6 +62,7 @@ export default function NewCandidatePage() {
       id_number: idNumber.trim(),
       phone: phone ? normalizePhone(phone) : null, // ← NOVO
       school_id: schoolId,
+      category: category,
       exam_date: examDate || null,
       exam_passed: examPassed === '' ? null : !!examPassed,
       first_lesson_date: firstLesson || null,
@@ -81,6 +83,7 @@ export default function NewCandidatePage() {
     setFirstLesson('')
     setLastLesson('')
     setNotMyCandidate(false)
+    setCategory('B')
     setOk('Kandidat je sačuvan.')
   }
 
@@ -130,6 +133,16 @@ export default function NewCandidatePage() {
                 {s.name}
               </option>
             ))}
+          </select>
+          <select
+            className="border rounded p-2"
+            value={category}
+            onChange={(e) => setCategory(e.target.value as 'B' | 'A')}
+          >
+            <option value="B">B kategorija</option>
+            <option value="A">A kategorija</option>
+            <option value="A2">A2 kategorija</option>
+            <option value="A1">A1 kategorija</option>
           </select>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

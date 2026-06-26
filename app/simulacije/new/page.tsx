@@ -13,6 +13,7 @@ type Question = {
   points: number
   multi_correct: boolean
   answers: Answer[]
+  category: string
 }
 
 async function findDuplicateSimulation(
@@ -141,6 +142,9 @@ function QuestionRow({
               Bodovi: {q.points} •{' '}
               {correctCount === 1 ? 'Jedan tačan' : formatTacni(correctCount)}
             </div>
+            <div className="text-xs text-gray-600 mt-1">
+              Kategorija: <strong>{q.category}</strong>
+            </div>
           </div>
           <div className="mt-2 text-right">
             <button className="text-sm underline" onClick={() => onAdd(q)}>
@@ -187,11 +191,12 @@ export default function NewSimulationPage() {
         const { data: qByText } = await sb
           .from('questions')
           .select(
-            'id, text, image_url, points, multi_correct, answers:answers(id, text, is_correct)'
+            'id, text, image_url, points, multi_correct, answers:answers(id, text, is_correct), category'
           )
           .ilike('text', `%${t}%`)
+          .eq('category', 'B')
           .order('created_at', { ascending: true })
-          .limit(100)
+          .limit(200)
 
         const byText = (qByText ?? []) as Question[]
 
@@ -200,6 +205,7 @@ export default function NewSimulationPage() {
           .from('answers')
           .select('question_id')
           .ilike('text', `%${t}%`)
+          .order('created_at', { ascending: true })
           .limit(500)
 
         const idsFromAnswers = Array.from(
@@ -215,7 +221,7 @@ export default function NewSimulationPage() {
           const { data: qByAns } = await sb
             .from('questions')
             .select(
-              'id, text, image_url, points, multi_correct, answers:answers(id, text, is_correct)'
+              'id, text, image_url, points, multi_correct, answers:answers(id, text, is_correct), category'
             )
             .in('id', missingIds)
             .order('created_at', { ascending: true })

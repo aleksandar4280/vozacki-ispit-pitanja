@@ -18,6 +18,7 @@ import {
   BookOpen,
   ChevronLeft,
   ChevronRight,
+  DollarSign,
 } from 'lucide-react'
 
 export default function RootLayout({
@@ -90,6 +91,13 @@ export default function RootLayout({
                     >
                       <AlertCircle size={18} />
                       <span>Pogrešno odgovorena</span>
+                    </Link>
+                    <Link
+                      href="/moja-pitanja"
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-300 hover:text-white"
+                    >
+                      <FileText size={18} />
+                      <span>Moje grupe pitanja</span>
                     </Link>
                   </div>
                 </div>
@@ -166,6 +174,21 @@ export default function RootLayout({
                     >
                       <BookOpen size={18} />
                       <span>Dnevnik TO</span>
+                    </Link>
+                  </div>
+                </div>
+                {/* STATISTIKA */}
+                <div>
+                  <div className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Statistika
+                  </div>
+                  <div className="space-y-1">
+                    <Link
+                      href="/statistika-zarade"
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-300 hover:text-white"
+                    >
+                      <DollarSign size={18} />
+                      <span>Statistika zarade</span>
                     </Link>
                   </div>
                 </div>

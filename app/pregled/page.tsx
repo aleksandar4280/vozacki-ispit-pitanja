@@ -123,6 +123,8 @@ export default function PregledPage() {
   const [questions, setQuestions] = useState<Question[]>([])
   const [loaded, setLoaded] = useState(false)
   const [revealBySub, setRevealBySub] = useState<Record<number, boolean>>({})
+  // Filtriranje po kategoriji
+  const [categoryFilter, setCategoryFilter] = useState<'B' | 'A'>('B')
 
   // --- Globalna pretraga ---
   const [globalQ, setGlobalQ] = useState<string>('')
@@ -179,6 +181,7 @@ export default function PregledPage() {
         'id, text, image_url, points, multi_correct, subarea_id, mup_id, answers:answers(id, text, is_correct)'
       )
       .eq('subarea_id', subId)
+      .eq('category', categoryFilter)
       .order('created_at', { ascending: true })
     if (error) {
       console.error(error)
@@ -209,8 +212,9 @@ export default function PregledPage() {
             'id, text, image_url, points, multi_correct, subarea_id, mup_id, answers:answers(id, text, is_correct)'
           )
           .ilike('text', `%${term}%`)
+          .eq('category', categoryFilter)
           .order('created_at', { ascending: true })
-          .limit(300)
+          .limit(500)
         if (lastReq.current !== reqId) return
         if (error) {
           setGlobalErr(error.message)
@@ -230,7 +234,7 @@ export default function PregledPage() {
       }
     }, 400)
     return () => clearTimeout(t)
-  }, [globalQ, supabase])
+  }, [globalQ, categoryFilter, supabase])
 
   // Common preview
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -361,6 +365,23 @@ export default function PregledPage() {
       {/* BLOK 1: Filtriranje po oblasti/podoblasti */}
       <div className="space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-sm">Kategorija</label>
+            <select
+              className="w-full border rounded p-2"
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value as 'B' | 'A')
+                setAreaId('')
+                setSubId('')
+                setLoaded(false)
+                setQuestions([])
+              }}
+            >
+              <option value="B">B kategorija</option>
+              <option value="A">A kategorija</option>
+            </select>
+          </div>
           <div>
             <label className="block text-sm">Oblast</label>
             <select
